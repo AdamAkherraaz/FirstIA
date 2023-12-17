@@ -1,0 +1,57 @@
+
+README for Bulletin Reader SCOOLIZE ED
+
+Overview
+Bulletin Reader SCOOLIZE ED is a Python-based application designed to extract and analyze text from images, specifically focusing on school report cards. Utilizing Flask for web API interaction, PyTesseract for Optical Character Recognition (OCR), and Pandas for data handling, it offers an automated way to process and analyze educational data.
+
+Requirements
+Before using Bulletin Reader SCOOLIZE ED, ensure the following components are installed:
+
+Python: The core language in which the application is written. Download Python
+
+Flask: A micro web framework used for the web API. Install via pip:
+                        pip install Flask
+
+PyTesseract: A Python wrapper for Google’s Tesseract-OCR Engine. Install it along with its dependencies:
+arduino
+                        pip install pytesseract
+sudo apt-get install tesseract-ocr
+
+Pillow (PIL): Python Imaging Library, required for image processing. Install via pip:
+                        pip install Pillow
+
+Pandas: A powerful data analysis and manipulation library for Python. Install via pip:
+                        pip install pandas
+
+Other Dependencies: Ensure re and csv modules are available in your Python environment (usually they come built-in with Python).
+
+Setup and Usage
+Clone or Download the Repository: Obtain the source code from its repository.
+
+Running the Application:
+
+Navigate to the directory containing the application files.
+Run the application using Python:
+php
+Copy code
+python BulletinReader.py
+The Flask server will start, typically on http://127.0.0.1:5000/.
+Using the Web API:
+
+Send a POST request to /upload with an image file.
+The image should be in formats such as PNG, JPG, JPEG, GIF, or WEBP.
+The API extracts text from the image, processes it, and returns a CSV file with the extracted data.
+Functionality
+Image Upload and Validation: Users can upload images via the web API. The system validates the file format before processing.
+
+Text Extraction: Utilizes PyTesseract to extract text from the provided image.
+
+Data Parsing and Analysis: The extracted text is parsed using regular expressions, focusing on extracting relevant educational data.
+
+CSV Generation: The extracted and parsed data is saved into a CSV file, making it easy to use and analyze further.
+
+Notes
+Make sure to read Tesseract documentation for utilisation. A wrong installation of Tesseract can't make the script unusuable
+Ensure the image quality is good for accurate OCR results.
+The application is set up for French text extraction; modify the lang='fra' parameter in PyTesseract for other languages.
+Customize the regular expressions in parse_extracted_text function based on the format of your report cards.

@@ -1,89 +1,103 @@
-import pandas as pd
-import pytesseract
+from flask import Flask, request, send_file
+import os
 from PIL import Image
-import nltk
+import pytesseract
+import re
+import csv
+import pandas as pd
+
+app = Flask(__name__)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return "Aucun fichier fourni", 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return "Aucun fichier sélectionné", 400
+
+    if file and allowed_file(file.filename):
+        img_path = './temp/' + file.filename
+        file.save(img_path)
+        return process_image(img_path)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ['png', 'jpg', 'jpeg', 'gif', 'webp']
+
+def process_image(img_path):
+    text = extract_text_from_image(img_path)
+    extracted_info = parse_extracted_text(text)
+    
+    if not extracted_info:
+        return "Aucune donnée n'a été extraite. Vérifiez la sortie OCR et le regex.", 400
+
+    csv_filename = './anonymized_grades.csv'
+    save_to_csv(extracted_info, csv_filename)
+
+    return send_file(csv_filename, as_attachment=True)
 
 
-df_hommes = pd.read_csv('NomHomme.csv')
-df_femmes = pd.read_csv('NomFemme.csv')
+img_path = './assets/Bulletin_Scolaire.jpg.webp'
+
+def extract_text_from_image(img_path):
+    image = Image.open(img_path)
+    text = pytesseract.image_to_string(image, lang='fra')
+    return text
+
+def parse_extracted_text(text):
+    pattern = r'Matières\s+Moy\s+/20\s+Min\s+Max\s+Moy\s+Appréciations\n(.*?)(?=\nMoyenne générale|\Z)'
+    subjects_text = re.search(pattern, text, re.DOTALL)
+    
+    if not subjects_text:
+        return []
+
+    subjects_text = subjects_text.group(1)
+    subject_pattern = (
+        r'(\w[\w\séèêàçûôîâÉÈÊÀÇÛÔÎÂ-]+(?: \(\d\))?)\s+'  
+        r'(\d{1,2}[.,]\d{2})\s+'                        
+        r'(\d{1,2}[.,]\d{2})\s+'                        
+        r'(\d{1,2}[.,]\d{2})\s+'                         
+        r'(\d{1,2}[.,]\d{2})\s+'                         
+        r'(.+)'                                          
+    )
+    
+    matches = re.findall(subject_pattern, subjects_text)
+    extracted_info = [{'subject': match[0].strip(),
+                       'student_average': match[1].replace(',', '.'),
+                       'class_average': match[4].replace(',', '.'),
+                       'comments': match[5].strip()} for match in matches]
+    return extracted_info
+
+def save_to_csv(data, filename):
+    if not data:
+        print("La liste des données est vide. Rien à enregistrer.")
+        return
+    with open(filename, 'w', newline='', encoding='utf-8') as output_file:
+        writer = csv.DictWriter(output_file, fieldnames=['subject', 'student_average', 'class_average', 'comments'])
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
+
+def main(img_path):
+    text = extract_text_from_image(img_path)
+    print("Texte extrait par OCR :") 
+    print(text)  
+
+    extracted_info = parse_extracted_text(text)
+    if not extracted_info:
+        print("Aucune donnée n'a été extraite. Vérifiez la sortie OCR et le regex.")
+        return
+
+    save_to_csv(extracted_info, './anonymized_grades.csv')
+
+    df = pd.DataFrame({'text_column': [text]})
+    df.to_csv('./Bulletin.csv', index=False)
+
+main(img_path)
 
 
-ensemble_hommes = set(df_hommes['preusuel'].str.upper())
-ensemble_femmes = set(df_femmes['preusuel'].str.upper())
+main(img_path)
 
-def extract_text_from_image(file_path):
-    try:
-        return pytesseract.image_to_string(Image.open(file_path))
-    except Exception as e:
-        print(f"Erreur lors de la lecture de l'image: {e}")
-        return None
-
-
-def extract_text_from_txt(file_path):
-    try:
-        with open(file_path, 'r') as file:
-            return file.read()
-    except Exception as e:
-        print(f"Erreur lors de la lecture du fichier texte: {e}")
-        return None
-
-
-def extract_names(text, df_hommes, df_femmes):
-    nltk.download('names', quiet=True)
-    from nltk.corpus import names
-    words = set(text.upper().split())
-    names_list = set(word for word in words if word.capitalize() in names.words())
-    result = []
-
-    for name in names_list:
-        name_title = name.title()
-        if name in ensemble_hommes and name in ensemble_femmes:
-          
-            somme_homme = df_hommes[df_hommes['preusuel'] == name_title]['nombre'].sum()
-            somme_femme = df_femmes[df_femmes['preusuel'] == name_title]['nombre'].sum()
-
-            if somme_homme > somme_femme:
-                result.append(f"{name_title} & Homme")
-            else:
-                result.append(f"{name_title} & Femme")
-        elif name in ensemble_hommes:
-            result.append(f"{name_title} & Homme")
-        elif name in ensemble_femmes:
-            result.append(f"{name_title} & Femme")
-        else:
-            result.append("Rien ne match")
-
-    return result
-
-
-
-def process_file(file_path, df_hommes, df_femmes):
-    if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
-        text = extract_text_from_image(file_path)
-    elif file_path.lower().endswith('.txt'):
-        text = extract_text_from_txt(file_path)
-    else:
-        print("Format de fichier non pris en charge.")
-        return None
-
-    if text:
-        return extract_names(text, df_hommes, df_femmes)
-    else:
-        print("Aucun texte trouvé ou fichier illisible.")
-        return None
-
-
-
-def main():
-    file_path = input("Entrez le chemin du fichier: ")
-    names = process_file(file_path, df_hommes, df_femmes)
-    if names:
-        print("Prénoms trouvés:")
-        for name in names:
-            print(name)
-    else:
-        print("Aucun prénom trouvé.")
-
-
-if __name__ == "__main__":
-    main()
+if __name__ =='__main__':
+    app.run(debug=True)
